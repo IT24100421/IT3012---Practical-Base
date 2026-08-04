@@ -35,19 +35,40 @@ class VisualGridHuntGame:
             if tuple(op_pos) != (0, 0) and tuple(op_pos) not in self.walls and tuple(op_pos) not in self.food_positions:
                 self.opponents.append(op_pos)
 
+        # Step 2.1: Declare toxic trap set - avoiding (0,0), walls, and food
+        self.toxic_traps = set()
+        trap_candidates = [
+            (tx, ty)
+            for tx in range(self.width)
+            for ty in range(self.height)
+            if (tx, ty) != (0, 0)
+            and (tx, ty) not in self.walls
+            and (tx, ty) not in self.food_positions
+        ]
+        # Place 3 toxic traps randomly from valid candidates
+        for pos in random.sample(trap_candidates, min(3, len(trap_candidates))):
+            self.toxic_traps.add(pos)
+
         self.score = 0
         self.steps = 0
         self.collision = False
 
     def get_percept(self) -> dict:
+        ahead = self._ahead_position()
+
+        wall_ahead = (
+            ahead in self.walls
+            or ahead[0] < 0
+            or ahead[0] >= self.width
+            or ahead[1] < 0
+            or ahead[1] >= self.height
+        )
+
+        food_here = tuple(self.agent_pos) in self.food_positions
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions)
+            'wall_ahead': wall_ahead,
+            'food_here': food_here
         }
 
     def execute_action(self, action: str):
@@ -73,6 +94,10 @@ class VisualGridHuntGame:
             self.food_positions.remove(tuple_pos)
             self.score += 20
 
+        # Step 2.3: Check if agent stepped on a toxic trap
+        if tuple_pos in self.toxic_traps:
+            self.score -= 15
+
         for op in self.opponents:
             move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
             if move == 'Up' and op[1] < self.height - 1:
@@ -90,6 +115,47 @@ class VisualGridHuntGame:
 
     def is_done(self) -> bool:
         return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+
+    class SimpleReflexAgent:
+        """A simple reflex agent that makes decisions using only the current percept."""
+
+        def sense_and_act(self, percept):
+            # IF food is here, collect it
+            if percept["food_here"]:
+                return "Suck"
+
+            # IF there is a wall ahead, turn left
+            elif percept["wall_ahead"]:
+                return "TurnLeft"
+
+            # OTHERWISE move forward
+            else:
+                return "MoveForward"
+
+    class ModelBasedAgent:
+
+        def __init__(self):
+            self.visited_cells = set()
+            self.last_action = None
+
+        def sense_and_act(self, percept):
+            # Update memory
+            self.visited_cells.add(tuple(percept["agent_pos"]))
+
+            # Decide action using memory + percept
+            if percept["food_here"]:
+                action = "Suck"
+
+            elif percept["wall_ahead"]:
+                action = "TurnLeft"
+
+            else:
+                action = "MoveForward"
+
+            # Remember last action
+            self.last_action = action
+
+            return action
 
 
 class GridGameGUI:
@@ -145,6 +211,19 @@ class GridGameGUI:
             y1 = (self.env.height - 1 - fy) * self.cell_size + offset
             self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.5, y1 + self.cell_size * 0.5, fill="#f59e0b",
                                     outline="#d97706")
+
+        # Step 2.3: Render toxic traps as purple diamonds
+        for tx, ty in self.env.toxic_traps:
+            cx = tx * self.cell_size + self.cell_size / 2
+            cy = (self.env.height - 1 - ty) * self.cell_size + self.cell_size / 2
+            r = self.cell_size * 0.35
+            self.canvas.create_polygon(
+                cx, cy - r,       # top
+                cx + r, cy,       # right
+                cx, cy + r,       # bottom
+                cx - r, cy,       # left
+                fill="#7c3aed", outline="#4c1d95", width=2
+            )
 
         for ox, oy in self.env.opponents:
             offset = self.cell_size * 0.2
