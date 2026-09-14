@@ -1,6 +1,8 @@
 from collections import deque
 import heapq
 import math
+import random
+from logic_engine import KnowledgeBase
 
 # agent.py
 class GreedyGridAgent:
@@ -15,6 +17,7 @@ class GreedyGridAgent:
         # Simple heuristic or fallback random sweep
         return random.choice(self.actions_pool)
 
+
     from collections import deque
 import heapq
 
@@ -24,6 +27,18 @@ class SearchAgent:
     def __init__(self):
         self.plan = []
         self.active_algo = 'AStar'
+
+        self.kb = KnowledgeBase()
+
+        self.kb.tell_rule(
+        ['TargetVisible', 'HasDust'],
+        'SafeToEngage'
+        )
+
+        self.kb.tell_rule(
+            ['SafeToEngage', 'BloodseekerMissing'],
+            'Retreat'
+        )
 
     def manhattan_distance(self, pos, goal):
             return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
@@ -39,7 +54,8 @@ class SearchAgent:
             goal_pos,
             walls,
             grid_size,
-            heuristic_type='manhattan'
+            heuristic_type='manhattan',
+            percepts=None
         ):
             frontier = []
             reached_states = set()
@@ -78,10 +94,23 @@ class SearchAgent:
                     grid_size,
                     walls
                 ):
+                    self.kb.clear_facts()
+
+                    # feed percepts for this tile
+                    if percepts is not None:
+                        if neighbor in percepts.get('dust_tiles', []):
+                            self.kb.tell_fact('HasDust')
+                        if neighbor in percepts.get('target_tiles', []):
+                            self.kb.tell_fact('TargetVisible')
+                        if neighbor in percepts.get('bloodseeker_missing_tiles', []):
+                            self.kb.tell_fact('BloodseekerMissing')
+
+                    self.kb.forward_chain()
+
+                    if 'Retreat' in self.kb.facts:
+                        continue
 
                     if neighbor not in reached_states:
-
-                        # g(n)
                         new_g = g_cost + 1
 
                         # h(n)
@@ -251,7 +280,8 @@ class SearchAgent:
                         goal,
                         walls,
                         grid_size,
-                        heuristic_type='manhattan'
+                        heuristic_type='manhattan',
+                        percepts=percept
                     )
 
             if path:
