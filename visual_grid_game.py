@@ -59,7 +59,13 @@ class VisualGridHuntGame:
             'agent_pos': tuple(self.agent_pos),
             'grid_size': (self.width, self.height),
             'walls': list(self.walls),
-            'all_food': list(self.food_positions)
+            'all_food': list(self.food_positions),
+            # Simulated KB percept fields for the lab.
+            # Food tiles: TargetVisible + HasDust -> SafeToEngage (allowed).
+            # Trap tiles: TargetVisible + HasDust + BloodseekerMissing -> Retreat (skipped).
+            'target_tiles': list(self.food_positions) + list(self.toxic_traps),
+            'dust_tiles': list(self.food_positions) + list(self.toxic_traps),
+            'bloodseeker_missing_tiles': list(self.toxic_traps)
         }
 
     def execute_action(self, action: str):
